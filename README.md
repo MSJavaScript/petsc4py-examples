@@ -11,3 +11,5 @@ run the code by
 ```bash
 mpiexec -np 4 python3 test_heat.py
 ```
+
+The correspondin C codes are also given. You can compile the C code by the makefile...
