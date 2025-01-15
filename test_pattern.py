@@ -26,14 +26,20 @@ class Pattern():
     #     G^v(t,u,v) = + u v^2 - (phi + kappa) v
     def FormRHSFunctionLocal(self, ts, t, vec_Y, vec_G):
         self.RHSFcn_called = True 
-        aY = da.getVecArray(vec_Y)
+
+        self.da.globalToLocal(vec_Y, self.local_vec_Y)
+        aY = da.getVecArray(self.local_vec_Y)
+
         aG = da.getVecArray(vec_G)
         (xs, xe), (ys, ye) = da.getRanges()
-        for j in range(ys, ye):
-            for i in range(xs, xe):
-                uv2 = aY[i,j,0]*aY[i,j,1]*aY[i,j,1]
-                aG[i,j,0] = -uv2 + self.phi*(1.0 - aY[i,j,0])
-                aG[i,j,1] = +uv2 - (self.phi+self.kappa)*aY[i,j,1]
+        uv2 = aY[xs:xe, ys:ye, 0] * aY[xs:xe, ys:ye, 1] * aY[xs:xe, ys:ye, 1]
+        aG[xs:xe, ys:ye, 0] = -uv2 + self.phi*(1.0 - aY[xs:xe, ys:ye,0])
+        aG[xs:xe, ys:ye, 1] = uv2 - (self.phi+self.kappa)*aY[xs:xe, ys:ye, 1]
+        # for j in range(ys, ye):
+        #     for i in range(xs, xe):
+        #         uv2 = aY[i,j,0]*aY[i,j,1]*aY[i,j,1]
+        #         aG[i,j,0] = -uv2 + self.phi*(1.0 - aY[i,j,0])
+        #         aG[i,j,1] = +uv2 - (self.phi+self.kappa)*aY[i,j,1]
         return True 
 
     def FormRHSJacobianLocal(self, ts, t, vec_Y, Mat_J, Mat_P):
@@ -66,7 +72,7 @@ class Pattern():
         if Mat_J != Mat_P:
             Mat_J.assemble()
         return True
-
+ 
     # Callable[[TS, float, Vec, Vec, Vec], None]
     def FormIFunctionLocal(self, ts, t, vec_Y, vec_Ydot, vec_F):
         self.da.globalToLocal(vec_Y, self.local_vec_Y)
@@ -80,14 +86,28 @@ class Pattern():
         Cv = self.Dv / (6.0*h*h)
         self.IFcn_called = True 
         (xs, xe), (ys, ye) = da.getRanges()
-        for j in range(ys, ye):
-            for i in range(xs, xe):
-                u = aY[i, j, 0]
-                v = aY[i, j, 1]
-                lapu = aY[i-1,j+1,0] + 4.0*aY[i,j+1,0] + aY[i+1,j+1,0] + 4.0*aY[i-1,j,0] - 20.0*u + 4.0*aY[i+1, j, 0] + aY[i-1,j-1,0] + 4.0*aY[i,j-1,0] + aY[i+1,j-1,0]
-                lapv = aY[i-1,j+1,1] + 4.0*aY[i,j+1,1] + aY[i+1,j+1,1] + 4.0*aY[i-1,j,1] - 20.0*v + 4.0*aY[i+1, j, 1] + aY[i-1,j-1,1] + 4.0*aY[i,j-1,1] + aY[i+1,j-1,1]
-                aF[i,j,0] = aYdot[i,j,0] - Cu*lapu
-                aF[i,j,1] = aYdot[i,j,1] - Cv*lapv
+        u = aY[xs:xe, ys:ye, 0]
+        v = aY[xs:xe, ys:ye, 1]
+        lapu = aY[(xs-1):(xe-1),(ys+1):(ye+1),0] \
+            + 4.0*aY[xs:xe,(ys+1):(ye+1),0] + aY[(xs+1):(xe+1),(ys+1):(ye+1),0] \
+            + 4.0*aY[(xs-1):(xe-1),ys:ye,0] - 20.0*u + 4.0*aY[(xs+1):(xe+1), ys:ye, 0] \
+            + aY[(xs-1):(xe-1),(ys-1):(ye-1),0] + 4.0*aY[xs:xe,(ys-1):(ye-1),0] \
+            + aY[(xs+1):(xe+1),(ys-1):(ye-1),0]
+        lapv = aY[(xs-1):(xe-1),(ys+1):(ye+1),1] \
+            + 4.0*aY[xs:xe,(ys+1):(ye+1),1] + aY[(xs+1):(xe+1),(ys+1):(ye+1),1] \
+            + 4.0*aY[(xs-1):(xe-1),ys:ye,1] - 20.0*v + 4.0*aY[(xs+1):(xe+1), ys:ye, 1] \
+            + aY[(xs-1):(xe-1),(ys-1):(ye-1),1] + 4.0*aY[xs:xe,(ys-1):(ye-1),1] \
+            + aY[(xs+1):(xe+1),(ys-1):(ye-1),1]
+        aF[xs:xe, ys:ye, 0] = aYdot[xs:xe, ys:ye, 0] - Cu*lapu
+        aF[xs:xe, ys:ye, 1] = aYdot[xs:xe, ys:ye, 1] - Cv*lapv
+        # for j in range(ys, ye):
+        #     for i in range(xs, xe):
+        #         u = aY[i, j, 0]
+        #         v = aY[i, j, 1]
+        #         lapu = aY[i-1,j+1,0] + 4.0*aY[i,j+1,0] + aY[i+1,j+1,0] + 4.0*aY[i-1,j,0] - 20.0*u + 4.0*aY[i+1, j, 0] + aY[i-1,j-1,0] + 4.0*aY[i,j-1,0] + aY[i+1,j-1,0]
+        #         lapv = aY[i-1,j+1,1] + 4.0*aY[i,j+1,1] + aY[i+1,j+1,1] + 4.0*aY[i-1,j,1] - 20.0*v + 4.0*aY[i+1, j, 1] + aY[i-1,j-1,1] + 4.0*aY[i,j-1,1] + aY[i+1,j-1,1]
+        #         aF[i,j,0] = aYdot[i,j,0] - Cu*lapu
+        #         aF[i,j,1] = aYdot[i,j,1] - Cv*lapv
         return True
     
     # in system form  F(t,Y,dot Y) = G(t,Y),  compute combined/shifted
